@@ -25,7 +25,7 @@
 
 from __future__ import print_function
 
-import collections, json, os, re, shutil, socket, subprocess, tempfile, threading, time, urllib
+import collections, json, os, re, shutil, socket, subprocess, tempfile, threading, time, urllib, datetime
 try:
   import bottle
   import react.jsx
@@ -326,7 +326,7 @@ class BottleReact(object):
     render_server = kwargs.get('render_server', self._render_server)
     react_js = react_node.to_javascript()
     deps = self._build_dep_list(react_node.get_js_files())
-    classes = _make_json_string_browser_safe(json.dumps(list(react_node.get_react_classes())))
+    classes = _make_json_string_browser_safe(json.dumps(list(react_node.get_react_classes()), default=_date_json_serializer))
     deps_html = ['']
     for dep in deps:
       path = dep if dep.startswith('http://') or dep.startswith('https://') else self.get_asset_path(dep)
@@ -370,6 +370,12 @@ def _make_json_string_browser_safe(s):
 def _make_string_fn_safe(s):
   return "".join([c if re.match(r'[\w.]', c) else '_' for c in s])
 
+def _date_json_serializer(obj):
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        serialized = obj.isoformat()
+        return serialized
+    raise TypeError ("Type %s not serializable" % type(obj))
+
 def _get_free_tcp_port():
   tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   tcp.bind(('localhost', 0))
@@ -410,7 +416,7 @@ class _ReactNode(object):
     ret = [
       'React.createElement(',
         'bottlereact.%s' % self.react_class.name, ',',
-        _make_json_string_browser_safe(json.dumps(self.props)), ',',
+        _make_json_string_browser_safe(json.dumps(self.props, default=_date_json_serializer)), ',',
     ]
     ret.append('[')
     count = len(ret)
@@ -418,7 +424,7 @@ class _ReactNode(object):
       if isinstance(child, _ReactNode):
         ret.append(child.to_javascript())
       elif isinstance(child, basestring):
-        ret.append(_make_json_string_browser_safe(json.dumps(child)))
+        ret.append(_make_json_string_browser_safe(json.dumps(child, default=_date_json_serializer)))
       elif child is None:
         pass
       else:
